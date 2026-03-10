@@ -1190,16 +1190,103 @@ with open('out.txt', 'w') as f:
 
 1. Установка соединения с сервером БД функцией [connect()][db-api-connect]
 2. Выполнение запроса:
-   1. Получить объект курсора методом [cursor()](https://www.python.org/dev/peps/pep-0249/#cursor)  
-   2. Выполнить запрос методом [execute()](https://www.python.org/dev/peps/pep-0249/#id15)  
-   3. Если запрос на изменение данных или структуры БД:  
-      1. Нужно зафиксировать изменения методом [commit()](https://www.python.org/dev/peps/pep-0249/#commit)  
-   4. Если запрос на получение данных (SELECT):  
-      1. Фактические данные нужно разобрать:  
-         [fetchall()](https://www.python.org/dev/peps/pep-0249/#fetchall) - получить все строки таблицы в список  
-         [fetchone()](https://www.python.org/dev/peps/pep-0249/#fetchone) - получить одну строку из таблицы  
-         [fetchmany(N)](https://www.python.org/dev/peps/pep-0249/#fetchmany) - получить нужное кол-во строк (N) из таблицы  
+   1. Получить объект курсора методом [cursor()](https://www.python.org/dev/peps/pep-0249/#cursor)
+   2. Выполнить запрос методом [execute()](https://www.python.org/dev/peps/pep-0249/#id15)
+   3. Если запрос на изменение данных или структуры БД и ошибок не было,
+      то нужно зафиксировать изменения методом [commit()](https://www.python.org/dev/peps/pep-0249/#commit),
+      иначе откатить изменения методом [rollback()](https://peps.python.org/pep-0249/#rollback)
+   4. Если запрос на получение данных (SELECT), то результат запроса нужно разобрать:
+      * [fetchall()](https://www.python.org/dev/peps/pep-0249/#fetchall) - получить все строки таблицы в список
+      * [fetchone()](https://www.python.org/dev/peps/pep-0249/#fetchone) - получить одну строку из таблицы
+      * [fetchmany(N)](https://www.python.org/dev/peps/pep-0249/#fetchmany) - получить нужное кол-во строк (N) из таблицы
+   5. Закрыть объект курсора методом [close()](https://peps.python.org/pep-0249/#Cursor.close)
 3. Закрыть соединение с сервером БД методом [close()](https://www.python.org/dev/peps/pep-0249/#Connection.close)
+
+Пример работы с SQLite, используя модуль [sqlite3](https://docs.python.org/3/library/sqlite3.html) из стандартной библиотеки Python, следуя DB-API:
+
+```python
+import sqlite3
+
+
+conn = sqlite3.connect(':memory:')
+cursor = conn.cursor()
+
+try:
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS customer (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email VARCHAR(200) UNIQUE NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            about TEXT NOT NULL DEFAULT '',
+            is_active BOOLEAN NOT NULL DEFAULT 0,
+            created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+         )
+    ''')
+
+    cursor.execute(
+        'INSERT INTO customer (email, name) VALUES (?, ?)',
+        ('office@kyzima-spb.com', 'Кирилл Версетти')
+    )
+
+    conn.commit()
+except Exception:
+    conn.rollback()
+    raise
+finally:
+    cursor.close()
+    conn.close()
+```
+
+Пример показывает универсальный код, соответствующий DB-API, однако модуль предоставляет синтаксический сахар и этот пример можно переписать:
+
+```python
+import sqlite3
+
+
+with sqlite3.connect(':memory:') as conn:
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS customer (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email VARCHAR(200) UNIQUE NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            about TEXT NOT NULL DEFAULT '',
+            is_active BOOLEAN NOT NULL DEFAULT 0,
+            created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+         )
+    ''')
+
+    conn.execute(
+        'INSERT INTO customer (email, name) VALUES (?, ?)',
+        ('office@kyzima-spb.com', 'Кирилл Версетти')
+    )
+```
+
+Другой пример для PostgreSQL с синтаксическим сахаром модуля:
+
+```python
+import psycopg2
+
+
+DSN = 'host=localhost user=postgres password=toor dbname=demo'
+
+with psycopg2.connect(DSN) as conn:
+    with conn.cursor() as cursor:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS customer (
+                id SERIAL PRIMARY KEY,
+                email VARCHAR(200) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                about TEXT NOT NULL DEFAULT '',
+                is_active BOOLEAN NOT NULL DEFAULT 0,
+                created TIMESTAMP NOT NULL DEFAULT now()
+            )
+        ''')
+
+        cursor.execute(
+            'INSERT INTO customer (email, name) VALUES (?, ?)',
+            ('office@kyzima-spb.com', 'Кирилл Версетти')
+        )
+```
 
 ## Виртуальное окружение
 
